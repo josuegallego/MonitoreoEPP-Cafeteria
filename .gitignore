@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Node
+node_modules/
+.next/
+frontend/.env.local
+
+# Model weights (commit only the trained one)
+# backend/model/epp_classifier.pt  ← sí subir este
+
+# Large files
+*.mp4
+*.avi

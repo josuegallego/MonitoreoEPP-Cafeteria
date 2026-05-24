@@ -1,0 +1,11 @@
+{
+  "classes": [
+    "delantal",
+    "gorro",
+    "guantes",
+    "tapabocas"
+  ],
+  "img_size": 224,
+  "test_accuracy": 0.9459,
+  "architecture": "MobileNetV2 + Custom Head"
+}
