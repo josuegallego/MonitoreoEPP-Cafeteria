@@ -438,7 +438,7 @@ export default function Dashboard() {
             <StatCard label="Hora crítica" value={stats?.peakHour ?? '--'}
               sub="mayor incumplimiento" color="var(--amber)" />
             <StatCard label="EPP crítico" value={stats?.worst ?? '--'}
-              sub={stats ? `${stats.breakdown[stats.worst as EppClass]?.pct}% cumplimiento` : '--'}
+              sub={stats?.worst ? `${stats.breakdown[stats.worst as EppClass]?.pct}% cumplimiento` : stats ? 'sin incumplimientos' : '--'}
               color="var(--red)" />
           </div>
 
@@ -486,7 +486,7 @@ export default function Dashboard() {
                 `Total inspecciones: ${stats.total}`,
                 `Inspecciones con incumplimientos: ${stats.violations}`,
                 `Hora crítica: ${stats.peakHour}`,
-                `EPP más crítico: ${stats.worst}`,
+                `EPP más crítico: ${stats.worst ?? 'ninguno (100% cumplimiento)'}`,
                 '',
                 'PPE BREAKDOWN:',
                 ...EPP_CLASSES.map(e => `  ${e}: ${stats.breakdown[e].pct}% (${stats.breakdown[e].detected}/${stats.breakdown[e].total})`),

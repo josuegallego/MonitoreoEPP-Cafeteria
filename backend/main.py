@@ -47,10 +47,10 @@ CONF_PERSON  = 0.45   # confianza mínima para detectar persona
 # Umbral por clase: tapabocas tiene umbral más bajo porque el modelo
 # fue entrenado con imágenes aisladas y no generaliza bien en fotos reales
 CONF_EPP_PER_CLASS = {
-    'delantal':  0.50,   # activa en ropa colorida; exige alta certeza
-    'gorro':     0.30,   # rango real 0.40-0.65; solo detecta cuando el modelo es muy seguro
+    'delantal':  0.40,   # activa en ropa colorida; exige alta certeza
+    'gorro':     0.33,   # rango real 0.40-0.65; solo detecta cuando el modelo es muy seguro
     'guantes':   0.30,   # rango real 0.38-0.80
-    'tapabocas': 0.18,   # señal siempre baja; umbral permisivo
+    'tapabocas': 0.25,   # señal siempre baja; umbral permisivo
 }
 
 EPP_COLORS = {

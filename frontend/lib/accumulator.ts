@@ -48,12 +48,18 @@ export function computeStats(t: TurnoStore) {
   const violations = ins.filter(i => i.result.persons.some(p => p.violations.length > 0)).length
 
   const breakdown = Object.fromEntries(EPP_CLASSES.map(epp => {
-    const total    = ins.length
-    const detected = ins.filter(i => i.result.persons.some(p => p.detected.includes(epp))).length
+    let total = 0, detected = 0
+    for (const i of ins) {
+      for (const p of i.result.persons) {
+        total++
+        if (p.detected.includes(epp)) detected++
+      }
+    }
     return [epp, { total, detected, pct: total > 0 ? Math.round(detected / total * 100) : 0 }]
   })) as Record<EppClass, { total: number; detected: number; pct: number }>
 
-  const worst = EPP_CLASSES.reduce((a, b) => breakdown[a].pct <= breakdown[b].pct ? a : b)
+  const worstEpp = EPP_CLASSES.reduce((a, b) => breakdown[a].pct <= breakdown[b].pct ? a : b)
+  const worst = breakdown[worstEpp].pct < 100 ? worstEpp : null
 
   const hourMap: Record<string, number> = {}
   for (const i of ins) {
