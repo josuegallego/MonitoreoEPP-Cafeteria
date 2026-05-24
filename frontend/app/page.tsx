@@ -124,6 +124,7 @@ export default function Dashboard() {
   const [lastResult, setLastResult]   = useState<DetectionResult | null>(null)
   const [loading, setLoading]         = useState(false)
   const [backendOk, setBackendOk]     = useState<boolean | null>(null)
+  const [backendMsg, setBackendMsg]   = useState('Conectando...')
   const [simRunning, setSimRunning]   = useState(false)
   const [simMode, setSimMode]         = useState<'demo'|'real'>('demo')
   const [countdown, setCountdown]     = useState<number | null>(null)
@@ -146,11 +147,26 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
-  // Health check
+  // Health check con timeout y reintentos (Render free tier tarda ~30-60s en despertar)
   useEffect(() => {
-    fetch(`${BACKEND}/health`)
-      .then(r => r.ok ? setBackendOk(true) : setBackendOk(false))
-      .catch(() => setBackendOk(false))
+    let cancelled = false
+    let attempt = 0
+    const check = async () => {
+      if (cancelled) return
+      attempt++
+      if (attempt > 1) setBackendMsg(`Iniciando backend... (${attempt}s)`)
+      try {
+        const ctrl = new AbortController()
+        const tid  = setTimeout(() => ctrl.abort(), 8000)
+        const r    = await fetch(`${BACKEND}/health`, { signal: ctrl.signal })
+        clearTimeout(tid)
+        if (!cancelled) { setBackendOk(r.ok); setBackendMsg(r.ok ? 'Backend conectado' : 'Backend desconectado') }
+      } catch {
+        if (!cancelled) { setTimeout(check, 3000) }
+      }
+    }
+    check()
+    return () => { cancelled = true }
   }, [])
 
   const stats = turno ? computeStats(turno) : null
@@ -236,9 +252,7 @@ export default function Dashboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: backendOk === true ? 'var(--teal)' : backendOk === false ? 'var(--red)' : 'var(--amber)' }} />
-            <span style={{ fontSize: 11, color: 'var(--text2)' }}>
-              {backendOk === true ? 'Backend conectado' : backendOk === false ? 'Backend desconectado' : 'Conectando...'}
-            </span>
+            <span style={{ fontSize: 11, color: 'var(--text2)' }}>{backendMsg}</span>
           </div>
           <span className="mono" style={{ fontSize: 12, color: 'var(--text2)' }}>{clock}</span>
           <span className="badge badge-teal">
