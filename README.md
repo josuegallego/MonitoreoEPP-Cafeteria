@@ -57,6 +57,7 @@ El pipeline de análisis combina:
 ```text
 MonitoreoEPP-Cafeteria/
 ├── PruebasPDI/
+│
 ├── backend/
 │   ├── model/
 │   │   ├── confusion_matrix.png
@@ -109,6 +110,10 @@ MonitoreoEPP-Cafeteria/
 ```
 
 ## Descripción de carpetas y archivos principales
+
+### `PruebasPDI/`
+
+Contiene 41 imágenes de prueba utilizadas durante el desarrollo y validación visual del sistema. Estas imágenes permiten evidenciar diferentes escenarios de análisis y resultados obtenidos durante las pruebas del proyecto.
 
 ### `backend/`
 
@@ -163,10 +168,6 @@ Contiene la interfaz web del sistema.
 - `package-lock.json`: archivo generado por npm para registrar versiones exactas de dependencias.
 - `tailwind.config.js`, `postcss.config.js`, `tsconfig.json` y `next.config.js`: archivos de configuración del frontend.
 
-### `PruebasPDI/`
-
-Contiene 41 imágenes de prueba utilizadas durante el desarrollo y validación visual del sistema. Estas imágenes permiten evidenciar diferentes escenarios de análisis y resultados obtenidos durante las pruebas del proyecto.
-
 ### Archivos generales
 
 - `.gitignore`: define archivos y carpetas que no deben subirse al repositorio.
@@ -183,11 +184,15 @@ El dataset utilizado está incluido en el repositorio dentro de la carpeta:
 dataset_clasificacion/
 ```
 
-Está organizado en tres subconjuntos:
+Está organizado en tres subconjuntos, lo que permite separar las imágenes usadas para entrenamiento, validación y evaluación final del modelo:
 
-- `train`: imágenes usadas para entrenar el modelo.
-- `valid`: imágenes usadas para validar el desempeño durante el entrenamiento.
-- `test`: imágenes usadas para la evaluación final.
+| Subconjunto | Cantidad de imágenes | Uso |
+|---|---:|---|
+| `train` | 1117 | Entrenamiento del modelo |
+| `valid` | 161 | Validación durante el entrenamiento |
+| `test` | 111 | Evaluación final del modelo |
+
+En total, el dataset utilizado contiene **1389 imágenes**.
 
 Cada subconjunto contiene carpetas para las cuatro clases evaluadas:
 
@@ -198,7 +203,16 @@ guantes/
 tapabocas/
 ```
 
-Esta organización permite entrenar, validar y probar el modelo de forma separada.
+Para la evaluación final, el conjunto test quedó distribuido de la siguiente manera:
+
+| Clase | Imágenes en test |
+|---|---:|
+| Delantal | 29 |
+| Gorro | 21 |
+| Guantes | 31 |
+| Tapabocas | 30 |
+
+Esta distribución permitió evaluar el desempeño del modelo en cada una de las clases trabajadas.
 
 ## Modelo de clasificación
 
