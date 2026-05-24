@@ -480,7 +480,7 @@ export default function Dashboard() {
                 'DETALLE DE INSPECCIONES:',
                 ...(turno.inspections.map(i =>
                   `  [${i.time}] ${i.result.total_persons} persona(s) · ${i.result.global_compliance}% cumplimiento` +
-                  (i.result.persons.some(p => p.violations.length) ? ` · violaciones: ${[...new Set(i.result.persons.flatMap(p => p.violations))].join(', ')}` : ' · OK')
+                  (i.result.persons.some(p => p.violations.length) ? ` · violaciones: ${Array.from(new Set(i.result.persons.flatMap(p => p.violations))).join(', ')}` : ' · OK')
                 ))
               ]
               const b = new Blob([lines.join('\n')], { type: 'text/plain' })
