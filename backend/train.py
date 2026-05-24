@@ -1,23 +1,3 @@
-"""
-=============================================================================
-  SISTEMA EPP CAFETERÍA UAO — Pipeline de Entrenamiento
-  Procesamiento Digital de Imágenes · Prof. Nicolas Llanos Neuta
-=============================================================================
-
-Pipeline completo:
-  1. Carga y exploración del dataset
-  2. Preprocesamiento de imágenes (resize, normalización)
-  3. Data augmentation
-  4. Construcción del modelo CNN (MobileNetV2 + Transfer Learning)
-  5. Entrenamiento y validación
-  6. Evaluación con métricas (accuracy, F1, matriz de confusión)
-  7. Exportación del modelo entrenado
-
-Uso:
-    python train.py --dataset ../dataset --epochs 30 --batch 32
-=============================================================================
-"""
-
 import os
 import argparse
 import json
@@ -25,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # sin GUI — evita bloquear la terminal en Windows
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
@@ -40,11 +20,8 @@ from PIL import Image
 from sklearn.metrics import classification_report, confusion_matrix
 
 
-# ─────────────────────────────────────────────────────────────
-#  CONFIGURACIÓN
-# ─────────────────────────────────────────────────────────────
 EPP_CLASSES  = ['delantal', 'gorro', 'guantes', 'tapabocas']
-IMG_SIZE     = 224          # MobileNetV2 espera 224×224
+IMG_SIZE     = 224         
 DEVICE       = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 print(f"\n{'='*60}")
@@ -53,22 +30,8 @@ print(f"  Dispositivo: {DEVICE.upper()}")
 print(f"{'='*60}\n")
 
 
-# ─────────────────────────────────────────────────────────────
-#  1. PREPROCESAMIENTO Y AUGMENTATION
-# ─────────────────────────────────────────────────────────────
 def build_transforms():
-    """
-    Preprocesamiento:
-      - Resize a 224×224 (requerimiento MobileNetV2)
-      - Normalización con media y std de ImageNet
-        (μ=[0.485,0.456,0.406], σ=[0.229,0.224,0.225])
 
-    Data augmentation (solo train):
-      - Flip horizontal aleatorio
-      - Rotación ±15°
-      - Variación de brillo/contraste/saturación
-      - Random crop con padding
-    """
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
         std =[0.229, 0.224, 0.225]
@@ -94,9 +57,6 @@ def build_transforms():
     return train_tf, eval_tf
 
 
-# ─────────────────────────────────────────────────────────────
-#  2. DATASET Y DATALOADER
-# ─────────────────────────────────────────────────────────────
 def load_datasets(dataset_root: str):
     train_tf, eval_tf = build_transforms()
 
@@ -126,30 +86,8 @@ def build_loaders(train_ds, valid_ds, test_ds, batch_size: int):
     return train_loader, valid_loader, test_loader
 
 
-# ─────────────────────────────────────────────────────────────
-#  3. MODELO CNN — MobileNetV2 + Transfer Learning
-# ─────────────────────────────────────────────────────────────
 class EPPClassifier(nn.Module):
-    """
-    Arquitectura: MobileNetV2 (preentrenado en ImageNet) + cabeza clasificadora propia.
-
-    Estrategia de Transfer Learning:
-      Fase 1 — Feature extraction:
-        • Se congelan todos los pesos del backbone.
-        • Solo se entrena la cabeza clasificadora (Linear → ReLU → Dropout → Linear).
-        • Permite que el clasificador aprenda desde el principio sin corromper
-          las características ya aprendidas.
-
-      Fase 2 — Fine-tuning:
-        • Se descongelan las últimas capas del backbone.
-        • Se reentrena con lr muy bajo para ajustar representaciones específicas
-          de EPP de cocina.
-
-    Cabeza clasificadora:
-        features (1280) → Linear(512) → BN → ReLU → Dropout(0.4)
-                       → Linear(128) → ReLU → Dropout(0.2)
-                       → Linear(4)   → (softmax en inferencia)
-    """
+    
     def __init__(self, num_classes: int = 4, freeze_backbone: bool = True):
         super().__init__()
         backbone = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
@@ -158,8 +96,8 @@ class EPPClassifier(nn.Module):
             for param in backbone.parameters():
                 param.requires_grad = False
 
-        self.features = backbone.features   # salida: (B, 1280, 7, 7)
-        self.pool     = nn.AdaptiveAvgPool2d(1)  # → (B, 1280, 1, 1)
+        self.features = backbone.features 
+        self.pool     = nn.AdaptiveAvgPool2d(1)  
 
         self.classifier = nn.Sequential(
             nn.Linear(1280, 512),
@@ -173,12 +111,11 @@ class EPPClassifier(nn.Module):
         )
 
     def forward(self, x):
-        x = self.features(x)           # extracción de características
-        x = self.pool(x).flatten(1)    # global average pooling
-        return self.classifier(x)      # clasificación
+        x = self.features(x)        
+        x = self.pool(x).flatten(1)   
+        return self.classifier(x)    
 
     def unfreeze_top(self, n_layers: int = 3):
-        """Descongela las últimas n capas del backbone para fine-tuning."""
         layers = list(self.features.children())
         for layer in layers[-n_layers:]:
             for param in layer.parameters():
@@ -186,9 +123,6 @@ class EPPClassifier(nn.Module):
         print(f"   ✓ Fine-tuning: {n_layers} últimas capas del backbone descongeladas")
 
 
-# ─────────────────────────────────────────────────────────────
-#  4. ENTRENAMIENTO
-# ─────────────────────────────────────────────────────────────
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
     total_loss, correct, total = 0.0, 0, 0
@@ -262,9 +196,6 @@ def train(model, train_loader, valid_loader, epochs, lr, device, save_path):
     return history
 
 
-# ─────────────────────────────────────────────────────────────
-#  5. FINE-TUNING
-# ─────────────────────────────────────────────────────────────
 def fine_tune(model, train_loader, valid_loader, epochs, device, save_path):
     print(f"\n{'─'*50}")
     print("  FASE 2 — Fine-tuning")
@@ -302,9 +233,6 @@ def fine_tune(model, train_loader, valid_loader, epochs, device, save_path):
     return history
 
 
-# ─────────────────────────────────────────────────────────────
-#  6. EVALUACIÓN FINAL Y VISUALIZACIONES
-# ─────────────────────────────────────────────────────────────
 def plot_history(history, ft_history=None, out_dir='model'):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     fig.patch.set_facecolor('#0d1117')
@@ -364,9 +292,6 @@ def plot_confusion_matrix(labels, preds, classes, out_dir='model'):
     plt.close()
 
 
-# ─────────────────────────────────────────────────────────────
-#  MAIN
-# ─────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description='EPP Cafetería — Entrenamiento CNN')
     parser.add_argument('--dataset', default='../dataset', help='Ruta al dataset')
@@ -380,12 +305,10 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     save_path = os.path.join(args.out, 'epp_classifier.pt')
 
-    # ── Cargar datos ──────────────────────────────────────────
     train_ds, valid_ds, test_ds = load_datasets(args.dataset)
     train_loader, valid_loader, test_loader = build_loaders(
         train_ds, valid_ds, test_ds, args.batch)
 
-    # ── Construir modelo ──────────────────────────────────────
     model = EPPClassifier(num_classes=len(EPP_CLASSES), freeze_backbone=True)
     model = model.to(DEVICE)
 
@@ -394,16 +317,13 @@ def main():
     print(f"  Parámetros totales   : {total_params:,}")
     print(f"  Parámetros trainable : {trainable_params:,}  ({trainable_params/total_params*100:.1f}%)")
 
-    # ── Fase 1: Feature extraction ────────────────────────────
     history = train(model, train_loader, valid_loader,
                     args.epochs, args.lr, DEVICE, save_path)
 
-    # ── Fase 2: Fine-tuning ───────────────────────────────────
     model.load_state_dict(torch.load(save_path, map_location=DEVICE, weights_only=True))
     ft_history = fine_tune(model, train_loader, valid_loader,
                            args.ft_epochs, DEVICE, save_path)
 
-    # ── Evaluación en test ────────────────────────────────────
     model.load_state_dict(torch.load(save_path, map_location=DEVICE, weights_only=True))
     criterion = nn.CrossEntropyLoss()
     _, test_acc, test_preds, test_labels = evaluate(model, test_loader, criterion, DEVICE)
@@ -415,7 +335,6 @@ def main():
     print(classification_report(test_labels, test_preds,
                                  target_names=EPP_CLASSES))
 
-    # ── Guardar metadata ──────────────────────────────────────
     meta = {
         'classes': EPP_CLASSES,
         'img_size': IMG_SIZE,
@@ -425,7 +344,6 @@ def main():
     with open(os.path.join(args.out, 'model_meta.json'), 'w') as f:
         json.dump(meta, f, indent=2)
 
-    # ── Visualizaciones ───────────────────────────────────────
     plot_history(history, ft_history, out_dir=args.out)
     plot_confusion_matrix(test_labels, test_preds, EPP_CLASSES, out_dir=args.out)
 

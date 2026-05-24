@@ -10,7 +10,6 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
 const SIM_IMAGES = Array.from({ length: 39 }, (_, i) => `/test/prueba${i + 1}.jpg`)
   .map(v => ({ v, r: Math.random() })).sort((a, b) => a.r - b.r).map(x => x.v)
 
-// ── Stat card ─────────────────────────────────────────────────
 function StatCard({ label, value, sub, color = 'var(--text)' }: {
   label: string; value: string; sub?: string; color?: string
 }) {
@@ -23,7 +22,6 @@ function StatCard({ label, value, sub, color = 'var(--text)' }: {
   )
 }
 
-// ── EPP tag ──────────────────────────────────────────────────
 function EppTag({ epp, present }: { epp: EppClass; present: boolean }) {
   const m = EPP_META[epp]
   return (
@@ -39,7 +37,6 @@ function EppTag({ epp, present }: { epp: EppClass; present: boolean }) {
   )
 }
 
-// ── Person card ──────────────────────────────────────────────
 function PersonCard({ person, idx }: { person: Person; idx: number }) {
   const ok = person.violations.length === 0
   const c  = person.compliance >= 90 ? 'var(--teal)' : person.compliance >= 60 ? 'var(--amber)' : 'var(--red)'
@@ -88,7 +85,6 @@ function PersonCard({ person, idx }: { person: Person; idx: number }) {
   )
 }
 
-// ── PPE Breakdown ────────────────────────────────────────────
 function PPEBreakdown({ breakdown }: { breakdown: Record<EppClass, { pct: number }> | null }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -117,7 +113,6 @@ function PPEBreakdown({ breakdown }: { breakdown: Record<EppClass, { pct: number
   )
 }
 
-// ── Main Dashboard ───────────────────────────────────────────
 export default function Dashboard() {
   const [turno, setTurno]             = useState<TurnoStore | null>(null)
   const [annotated, setAnnotated]     = useState<string | null>(null)  // base64
@@ -147,7 +142,6 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
-  // Health check con timeout y reintentos (Render free tier tarda ~30-60s en despertar)
   useEffect(() => {
     let cancelled = false
     let attempt = 0
@@ -171,7 +165,6 @@ export default function Dashboard() {
 
   const stats = turno ? computeStats(turno) : null
 
-  // ── Send image to backend ────────────────────────────────
   const sendImage = useCallback(async (file: File | Blob) => {
     setLoading(true); setError(null)
     try {
@@ -203,7 +196,6 @@ export default function Dashboard() {
     e.target.value = ''
   }, [sendImage])
 
-  // ── Simulation ───────────────────────────────────────────
   const startSim = useCallback(() => {
     const ms = simMode === 'demo' ? 12_000 : 5 * 60 * 1000
     setSimRunning(true); setCountdown(ms / 1000)

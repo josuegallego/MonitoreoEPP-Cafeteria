@@ -1,20 +1,3 @@
-"""
-=============================================================================
-  SISTEMA EPP CAFETERÍA UAO — Backend FastAPI
-=============================================================================
-
-Pipeline de inferencia:
-  1. Recibe imagen (upload o base64)
-  2. Preprocesamiento: resize + normalización
-  3. YOLOv11n (COCO) → detecta personas → bounding boxes
-  4. Por cada persona: recorte → CNN MobileNetV2 → detecta EPP presentes
-  5. Retorna JSON con personas, EPP detectados/faltantes, compliance %
-
-Uso:
-    uvicorn main:app --reload --port 8000
-=============================================================================
-"""
-
 import io
 import json
 import base64
@@ -35,22 +18,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 
-# ─────────────────────────────────────────────────────────────
-#  CONFIG
-# ─────────────────────────────────────────────────────────────
 EPP_CLASSES  = ['delantal', 'gorro', 'guantes', 'tapabocas']
 IMG_SIZE     = 224
 DEVICE       = 'cuda' if torch.cuda.is_available() else 'cpu'
 MODEL_PATH   = Path(__file__).parent / 'model' / 'epp_classifier.pt'
-CONF_PERSON  = 0.45   # confianza mínima para detectar persona
+CONF_PERSON  = 0.45 
 
-# Umbral por clase: tapabocas tiene umbral más bajo porque el modelo
-# fue entrenado con imágenes aisladas y no generaliza bien en fotos reales
 CONF_EPP_PER_CLASS = {
-    'delantal':  0.40,   # activa en ropa colorida; exige alta certeza
-    'gorro':     0.33,   # rango real 0.40-0.65; solo detecta cuando el modelo es muy seguro
-    'guantes':   0.30,   # rango real 0.38-0.80
-    'tapabocas': 0.25,   # señal siempre baja; umbral permisivo
+    'delantal':  0.40,
+    'gorro':     0.33,  
+    'guantes':   0.30, 
+    'tapabocas': 0.25, 
 }
 
 EPP_COLORS = {
@@ -63,9 +41,6 @@ VIOLATION_COLOR = (255, 77, 77)
 PERSON_COLOR    = (100, 100, 255)
 
 
-# ─────────────────────────────────────────────────────────────
-#  PREPROCESAMIENTO (igual que en train.py)
-# ─────────────────────────────────────────────────────────────
 PREPROCESS = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor(),
@@ -74,9 +49,6 @@ PREPROCESS = transforms.Compose([
 ])
 
 
-# ─────────────────────────────────────────────────────────────
-#  MODELO CNN (misma arquitectura que train.py)
-# ─────────────────────────────────────────────────────────────
 class EPPClassifier(nn.Module):
     def __init__(self, num_classes: int = 4):
         super().__init__()
@@ -100,12 +72,9 @@ class EPPClassifier(nn.Module):
         return self.classifier(x)
 
 
-# ─────────────────────────────────────────────────────────────
-#  CARGA DE MODELOS AL INICIO
-# ─────────────────────────────────────────────────────────────
 print(f"\n[EPP Backend] Dispositivo: {DEVICE.upper()}")
 print("[EPP Backend] Cargando YOLOv11n (detección de personas)...")
-yolo_model = YOLO('yolo11n.pt')   # descarga automática si no existe
+yolo_model = YOLO('yolo11n.pt')  
 
 print("[EPP Backend] Cargando CNN clasificador EPP...")
 epp_model = EPPClassifier(num_classes=len(EPP_CLASSES))
@@ -119,9 +88,6 @@ epp_model.eval()
 epp_model.to(DEVICE)
 
 
-# ─────────────────────────────────────────────────────────────
-#  FASTAPI APP
-# ─────────────────────────────────────────────────────────────
 app = FastAPI(
     title="EPP Cafetería UAO",
     description="Sistema de monitoreo de EPP con YOLOv11 + CNN MobileNetV2",
@@ -136,26 +102,19 @@ app.add_middleware(
 )
 
 
-# ─────────────────────────────────────────────────────────────
-#  LÓGICA DE INFERENCIA
-# ─────────────────────────────────────────────────────────────
 def preprocess_image(img: Image.Image) -> Image.Image:
-    """Convierte a RGB y normaliza el tamaño para el pipeline."""
     return img.convert('RGB')
 
 
 def detect_persons(img: Image.Image) -> list[dict]:
-    """
-    Paso 1: YOLOv11n detecta personas (clase 0 en COCO).
-    Retorna lista de bounding boxes [x1,y1,x2,y2] con confianza.
-    """
+
     results = yolo_model(img, classes=[0], conf=CONF_PERSON, verbose=False)
     persons = []
     for r in results:
         for box in r.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             conf = float(box.conf[0])
-            # Expandir box un 10% para incluir contexto
+
             w, h = img.size
             pad_x = int((x2 - x1) * 0.05)
             pad_y = int((y2 - y1) * 0.05)
@@ -169,7 +128,6 @@ def detect_persons(img: Image.Image) -> list[dict]:
 
 @torch.no_grad()
 def classify_epp(crop: Image.Image) -> dict[str, float]:
-    """CNN MobileNetV2: clasifica EPP en un recorte. Retorna probabilidades sigmoid."""
     tensor = PREPROCESS(crop).unsqueeze(0).to(DEVICE)
     logits = epp_model(tensor)[0]
     probs  = torch.sigmoid(logits)
@@ -177,11 +135,7 @@ def classify_epp(crop: Image.Image) -> dict[str, float]:
 
 
 def classify_epp_zoned(person_crop: Image.Image) -> dict[str, float]:
-    """
-    Clasificación con media geométrica entre crop completo y crop de zona.
-    La media geométrica requiere que AMBOS crops coincidan — reduce falsos positivos
-    causados por tomar el máximo (que dispara con cualquier crop espurio).
-    """
+
     w, h = person_crop.size
     head_crop  = person_crop.crop((0, 0,           w, max(1, int(h * 0.42))))
     torso_crop = person_crop.crop((0, int(h*0.18), w, max(1, int(h * 0.76))))
@@ -204,7 +158,6 @@ def classify_epp_zoned(person_crop: Image.Image) -> dict[str, float]:
 
 
 def _load_fonts(size_sm: int, size_md: int):
-    """Carga fuente TrueType; cae a la fuente por defecto si no está disponible."""
     for path in [
         "C:/Windows/Fonts/arialbd.ttf",
         "C:/Windows/Fonts/arial.ttf",
@@ -220,18 +173,13 @@ def _load_fonts(size_sm: int, size_md: int):
 
 
 def draw_results(img: Image.Image, persons: list[dict]) -> Image.Image:
-    """
-    Dibuja bboxes de personas con estado visible.
-    El detalle de cada EPP se muestra en las tarjetas del dashboard, no aquí,
-    para mantener la imagen legible sin importar qué tan pequeño sea el bbox.
-    """
+
     draw = ImageDraw.Draw(img, 'RGBA')
 
-    # Escala proporcional al tamaño real de la imagen
     scale  = max(1.5, img.width / 640)
     _, font_hd = _load_fonts(int(14 * scale), int(18 * scale))
     lw = max(2, int(3 * scale))
-    cs = int(22 * scale)   # longitud de las esquinas decorativas
+    cs = int(22 * scale)
 
     for i, p in enumerate(persons):
         x1, y1, x2, y2 = p['bbox']
@@ -240,22 +188,19 @@ def draw_results(img: Image.Image, persons: list[dict]) -> Image.Image:
         border_color  = VIOLATION_COLOR if has_violation else (0, 229, 176)
         status_text   = 'INCUMPLE' if has_violation else 'CUMPLE'
 
-        # ── Bounding box ──────────────────────────────────────
         draw.rectangle([x1, y1, x2, y2], outline=border_color + (210,), width=lw)
 
-        # ── Esquinas decorativas ──────────────────────────────
         ew = lw + 2
         draw.line([(x1, y1 + cs), (x1, y1), (x1 + cs, y1)], fill=border_color + (255,), width=ew)
         draw.line([(x2 - cs, y1), (x2, y1), (x2, y1 + cs)], fill=border_color + (255,), width=ew)
         draw.line([(x1, y2 - cs), (x1, y2), (x1 + cs, y2)], fill=border_color + (255,), width=ew)
         draw.line([(x2 - cs, y2), (x2, y2), (x2, y2 - cs)], fill=border_color + (255,), width=ew)
 
-        # ── Etiqueta: "P1  50%  CUMPLE" encima del bbox ───────
         pad      = int(8 * scale)
         label    = f"P{i + 1}   {compliance}%   {status_text}"
         hdr_h    = int(28 * scale)
         hdr_top  = max(0, y1 - hdr_h - 2)
-        hdr_bot  = max(hdr_top + 1, y1 - 2)   # garantiza hdr_bot > hdr_top
+        hdr_bot  = max(hdr_top + 1, y1 - 2)  
         draw.rectangle([x1, hdr_top, x2, hdr_bot], fill=(15, 15, 35, 225))
         draw.text(
             (x1 + pad, hdr_top + (hdr_h - int(18 * scale)) // 2),
@@ -264,11 +209,9 @@ def draw_results(img: Image.Image, persons: list[dict]) -> Image.Image:
             font=font_hd,
         )
 
-        # ── Mini-indicadores de EPP (puntos de color) ─────────
-        # Calcula tamaño de punto para que los 4 quepan dentro del bbox
         available_w = (x2 - x1) - 2 * pad
         n       = len(EPP_CLASSES)
-        dot_d   = min(int(20 * scale), available_w // (n * 2))   # diámetro
+        dot_d   = min(int(20 * scale), available_w // (n * 2))  
         dot_gap = max(2, (available_w - n * dot_d) // (n + 1))
         dot_x   = x1 + pad + dot_gap
         dot_y   = y2 - dot_d - int(6 * scale)
@@ -287,12 +230,10 @@ def draw_results(img: Image.Image, persons: list[dict]) -> Image.Image:
 
 
 def run_pipeline(img: Image.Image) -> dict:
-    """Pipeline completo: preprocesamiento → personas → EPP por persona → resultado."""
     img = preprocess_image(img)
     persons_raw = detect_persons(img)
 
     if not persons_raw:
-        # Sin persona detectada: analizar imagen completa con zonas
         probs = classify_epp_zoned(img)
         detected   = [c for c, p in probs.items() if p >= CONF_EPP_PER_CLASS[c]]
         violations = [c for c in EPP_CLASSES if c not in detected]
@@ -320,7 +261,6 @@ def run_pipeline(img: Image.Image) -> dict:
                 'compliance': compliance,
             })
 
-    # Imagen anotada
     img_draw = img.copy()
     img_draw = draw_results(img_draw, persons_out)
     buf = io.BytesIO()
@@ -339,9 +279,6 @@ def run_pipeline(img: Image.Image) -> dict:
     }
 
 
-# ─────────────────────────────────────────────────────────────
-#  ENDPOINTS
-# ─────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {
@@ -359,12 +296,7 @@ def health():
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
-    """
-    Recibe una imagen, corre el pipeline completo y retorna:
-    - persons: lista de personas con EPP detectados/faltantes
-    - global_compliance: % cumplimiento global
-    - annotated_image: imagen con bounding boxes en base64
-    """
+
     if not MODEL_PATH.exists():
         raise HTTPException(
             status_code=503,
@@ -380,11 +312,10 @@ async def detect(file: UploadFile = File(...)):
 
 
 class Base64Request(BaseModel):
-    image: str   # base64 sin prefijo data:...
+    image: str   
 
 @app.post("/detect/base64")
 async def detect_base64(req: Base64Request):
-    """Alternativa: recibe imagen en base64 (para el frontend Next.js)."""
     if not MODEL_PATH.exists():
         raise HTTPException(status_code=503,
                             detail="Modelo no entrenado. Ejecuta: python train.py")
