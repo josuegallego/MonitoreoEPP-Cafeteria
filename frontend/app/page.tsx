@@ -132,8 +132,22 @@ export default function Dashboard() {
   const alarmRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    alarmRef.current = new Audio('/alarma.mp3')
-    alarmRef.current.volume = 0.85
+    const audio = new Audio('/alarma.mp3')
+    audio.volume = 0.85
+    alarmRef.current = audio
+    // Los navegadores bloquean autoplay hasta el primer gesto del usuario.
+    // Este unlock silencioso hace que los plays posteriores (desde setInterval) funcionen.
+    const unlock = () => {
+      audio.play().then(() => { audio.pause(); audio.currentTime = 0 }).catch(() => {})
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+    }
+    document.addEventListener('click', unlock)
+    document.addEventListener('keydown', unlock)
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+    }
   }, [])
 
   useEffect(() => { setTurno(getTurno()) }, [])
@@ -179,7 +193,7 @@ export default function Dashboard() {
       const mayoriaIncumple = incumple >= Math.ceil(data.persons.length / 2)
       if (mayoriaIncumple && alarmRef.current) {
         alarmRef.current.currentTime = 0
-        alarmRef.current.play().catch(() => {})
+        alarmRef.current.play().catch(e => console.warn('[Alarma]', e))
       }
       const time = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
       const ins: Inspection = { id: Date.now().toString(), time, timestamp: Date.now(), result: data }
@@ -445,24 +459,65 @@ export default function Dashboard() {
             <div className="card-header">
               <span className="label">Alertas activas</span>
             </div>
-            <div style={{ padding: '12px 14px' }}>
-              {stats && stats.breakdown[stats.worst as EppClass]?.pct < 70 ? (
+            <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* Alerta inmediata: última inspección con violations */}
+              {lastResult && lastResult.persons.some(p => p.violations.length > 0) && (() => {
+                const violadores = lastResult.persons.filter(p => p.violations.length > 0)
+                const eppsFaltantes = Array.from(new Set(violadores.flatMap(p => p.violations)))
+                  .map(e => EPP_META[e].label).join(', ')
+                return (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'rgba(255,69,96,0.07)', border: '1px solid rgba(255,69,96,0.28)', borderRadius: 8 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)', flexShrink: 0 }}>!</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 3 }}>
+                        Incumplimiento detectado — {violadores.length} persona{violadores.length > 1 ? 's' : ''}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                        EPP faltante: {eppsFaltantes}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Alerta crítica del turno: EPP peor < 70% */}
+              {stats?.worst && stats.breakdown[stats.worst as EppClass]?.pct < 70 && (
                 <div style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'rgba(255,69,96,0.07)', border: '1px solid rgba(255,69,96,0.18)', borderRadius: 8 }}>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)' }}>!</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--red)', flexShrink: 0 }}>!</span>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 3 }}>
-                      {stats.worst} — EPP más incumplido en el turno
+                      {EPP_META[stats.worst as EppClass].label} — EPP crítico del turno
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                      Cumplimiento: {stats.breakdown[stats.worst as EppClass]?.pct}% · umbral: 70%
+                      Cumplimiento del turno: {stats.breakdown[stats.worst as EppClass]?.pct}% · umbral mínimo: 70%
                     </div>
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Advertencia del turno: EPP peor entre 70–99% */}
+              {stats?.worst && stats.breakdown[stats.worst as EppClass]?.pct >= 70 && (
+                <div style={{ display: 'flex', gap: 10, padding: '10px 12px', background: 'rgba(255,179,71,0.07)', border: '1px solid rgba(255,179,71,0.25)', borderRadius: 8 }}>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--amber)', flexShrink: 0 }}>⚠</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--amber)', marginBottom: 3 }}>
+                      {EPP_META[stats.worst as EppClass].label} — menor cumplimiento del turno
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                      Cumplimiento acumulado: {stats.breakdown[stats.worst as EppClass]?.pct}%
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sin alertas: no hay violations recientes ni EPP bajo 100% */}
+              {(!lastResult || lastResult.persons.every(p => p.violations.length === 0)) && !stats?.worst && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0' }}>
                   <span style={{ fontSize: 12, color: 'var(--text3)' }}>Sin alertas activas en este turno</span>
                 </div>
               )}
+
             </div>
           </div>
 
