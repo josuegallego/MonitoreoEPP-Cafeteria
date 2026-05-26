@@ -487,7 +487,7 @@ Recibe una imagen en formato base64 y devuelve el resultado del análisis.
 Enlace al video demostrativo:
 
 ```text
-Enlace del video
+https://youtu.be/b2-3f61FyFc
 ```
 
 ## Integrantes
