@@ -2,7 +2,7 @@
 
 Proyecto final de Procesamiento Digital de Imágenes orientado al monitoreo de higiene y bioseguridad en un entorno de cafetería universitaria.
 
-El sistema permite analizar imágenes de personas en una cafetería y determinar si cumplen con el uso de elementos de protección personal: delantal, gorro, guantes y tapabocas.
+El sistema permite analizar imágenes de una cafetería, detectar personas y evaluar si cumplen con el uso de elementos de protección personal: delantal, gorro, guantes y tapabocas.
 
 ## Contexto del proyecto
 
@@ -24,10 +24,11 @@ El flujo general es:
 2. Detecta personas en la imagen usando YOLOv11n.
 3. Recorta cada persona detectada.
 4. Clasifica los elementos de protección personal mediante una CNN basada en MobileNetV2.
-5. Calcula el porcentaje de cumplimiento por persona.
-6. Genera una imagen anotada con bounding boxes y resultados.
-7. Registra las inspecciones del turno.
-8. Permite descargar un reporte resumen.
+5. Analiza zonas corporales relacionadas con cada EPP.
+6. Calcula el porcentaje de cumplimiento por persona.
+7. Genera una imagen anotada con bounding boxes y resultados.
+8. Registra las inspecciones del turno.
+9. Permite descargar un reporte resumen.
 
 ## Elementos de protección evaluados
 
@@ -42,15 +43,21 @@ El sistema evalúa cuatro clases principales:
 
 El sistema está dividido en dos partes principales:
 
-- **Backend:** recibe las imágenes, ejecuta el modelo de visión computacional y devuelve los resultados.
-- **Frontend:** permite al usuario interactuar con el sistema, cargar imágenes, ejecutar simulaciones, visualizar resultados y descargar el reporte del turno.
+- **Backend:** recibe las imágenes, ejecuta el pipeline de visión computacional y devuelve los resultados.
+- **Frontend:** permite al usuario interactuar con el sistema, cargar imágenes, ejecutar simulaciones, visualizar resultados, consultar estadísticas y descargar el reporte del turno.
 
-El pipeline de análisis combina:
+El pipeline de análisis trabaja en dos etapas:
 
-- **YOLOv11n:** usado para detectar personas dentro de la imagen.
-- **CNN MobileNetV2:** usada para clasificar la presencia de elementos de protección personal en cada persona detectada.
-- **FastAPI:** usado para exponer los endpoints del backend.
-- **Next.js / React:** usado para construir la interfaz web.
+1. **Detección de personas:** YOLOv11n detecta las personas presentes en la imagen y genera las cajas delimitadoras.
+2. **Clasificación de EPP:** cada persona detectada se recorta y se envía a una CNN basada en MobileNetV2, entrenada para clasificar delantal, gorro, guantes y tapabocas.
+
+La clasificación no se realiza directamente sobre toda la imagen completa, sino sobre cada persona detectada. Además, el sistema se apoya en zonas corporales relacionadas con cada elemento:
+
+- **Cabeza:** gorro y tapabocas.
+- **Torso:** delantal.
+- **Manos:** guantes.
+
+A partir de estas predicciones, el sistema calcula el porcentaje de cumplimiento por persona, genera una imagen anotada, registra las inspecciones del turno y permite descargar un reporte.
 
 ## Estructura del repositorio
 
@@ -73,8 +80,22 @@ MonitoreoEPP-Cafeteria/
 │
 ├── dataset_clasificacion/
 │   ├── test/
+│   │   ├── delantal/
+│   │   ├── gorro/
+│   │   ├── guantes/
+│   │   └── tapabocas/
+│   │
 │   ├── train/
+│   │   ├── delantal/
+│   │   ├── gorro/
+│   │   ├── guantes/
+│   │   └── tapabocas/
+│   │
 │   └── valid/
+│       ├── delantal/
+│       ├── gorro/
+│       ├── guantes/
+│       └── tapabocas/
 │
 ├── frontend/
 │   ├── app/
@@ -113,7 +134,7 @@ MonitoreoEPP-Cafeteria/
 
 ### `PruebasPDI/`
 
-Contiene 41 imágenes de prueba utilizadas durante el desarrollo y validación visual del sistema. Estas imágenes permiten evidenciar diferentes escenarios de análisis y resultados obtenidos durante las pruebas del proyecto.
+Contiene 41 imágenes de prueba utilizadas durante el desarrollo y la validación visual del sistema. Estas imágenes permiten evidenciar diferentes escenarios de análisis y resultados obtenidos durante las pruebas del proyecto.
 
 ### `backend/`
 
@@ -136,20 +157,7 @@ Contiene los archivos generados durante el entrenamiento del modelo de clasifica
 
 ### `dataset_clasificacion/`
 
-Contiene el dataset utilizado para entrenar, validar y probar el modelo. Está dividido en:
-
-- `train`: imágenes usadas para entrenamiento.
-- `valid`: imágenes usadas para validación.
-- `test`: imágenes usadas para evaluación final.
-
-Cada subconjunto contiene las clases:
-
-```text
-delantal/
-gorro/
-guantes/
-tapabocas/
-```
+Contiene las imágenes utilizadas para entrenar, validar y probar el modelo de clasificación de EPP.
 
 ### `frontend/`
 
@@ -184,15 +192,17 @@ El dataset utilizado está incluido en el repositorio dentro de la carpeta:
 dataset_clasificacion/
 ```
 
-Está organizado en tres subconjuntos, lo que permite separar las imágenes usadas para entrenamiento, validación y evaluación final del modelo:
+El conjunto de datos es híbrido, ya que se construyó a partir de imágenes capturadas por el equipo en el contexto de cafetería y de imágenes de apoyo provenientes de fuentes públicas.
+
+Inicialmente se contó con **419 imágenes base**. Posteriormente, este conjunto fue ampliado mediante técnicas de aumento de datos hasta alcanzar un total de **1389 imágenes**.
+
+El dataset final está organizado en tres subconjuntos:
 
 | Subconjunto | Cantidad de imágenes | Uso |
 |---|---:|---|
 | `train` | 1117 | Entrenamiento del modelo |
 | `valid` | 161 | Validación durante el entrenamiento |
 | `test` | 111 | Evaluación final del modelo |
-
-En total, el dataset utilizado contiene **1389 imágenes**.
 
 Cada subconjunto contiene carpetas para las cuatro clases evaluadas:
 
@@ -203,7 +213,7 @@ guantes/
 tapabocas/
 ```
 
-Para la evaluación final, el conjunto test quedó distribuido de la siguiente manera:
+En el conjunto de prueba, las imágenes se distribuyeron así:
 
 | Clase | Imágenes en test |
 |---|---:|
@@ -212,7 +222,23 @@ Para la evaluación final, el conjunto test quedó distribuido de la siguiente m
 | Guantes | 31 |
 | Tapabocas | 30 |
 
-Esta distribución permitió evaluar el desempeño del modelo en cada una de las clases trabajadas.
+El clasificador final se entrenó como un problema de **clasificación por carpetas**. Por tanto, YOLOv11n no fue entrenado para detectar directamente los EPP; en el pipeline final, YOLOv11n se utiliza para detectar personas y la CNN basada en MobileNetV2 clasifica los elementos de protección personal sobre cada recorte.
+
+## Preprocesamiento y aumento de datos
+
+Antes de ingresar las imágenes al modelo, se aplicó una etapa de preprocesamiento para unificar el formato de entrada. Las imágenes fueron ajustadas al tamaño requerido por la red y normalizadas para mantener entradas consistentes durante el entrenamiento, la validación y la prueba.
+
+Además, se aplicaron transformaciones de aumento de datos sobre el conjunto base. Entre estas transformaciones se incluyeron:
+
+- Volteo horizontal.
+- Recorte con zoom máximo del 20%.
+- Rotación entre -15° y +15°.
+- Deformación tipo shear de ±10° horizontal y vertical.
+- Conversión parcial a escala de grises.
+- Variaciones de tono, saturación, brillo y exposición.
+- Desenfoque de hasta 2.5 px.
+
+Con este proceso, el dataset pasó de **419 imágenes base** a **1389 imágenes finales**, lo que permitió entrenar el clasificador con mayor diversidad visual.
 
 ## Modelo de clasificación
 
@@ -225,6 +251,12 @@ El modelo recibe como entrada el recorte de una persona detectada y estima la pr
 - Guantes
 - Tapabocas
 
+Además, el sistema apoya la clasificación en zonas corporales relacionadas con cada EPP:
+
+- Cabeza: gorro y tapabocas.
+- Torso: delantal.
+- Manos: guantes.
+
 A partir de estas predicciones, el sistema calcula qué elementos están presentes, cuáles faltan y cuál es el porcentaje de cumplimiento.
 
 ## Resultados del modelo
@@ -235,11 +267,26 @@ El modelo entrenado obtuvo una precisión final en el conjunto de prueba de:
 Test Accuracy: 94.59%
 ```
 
-Este valor se encuentra registrado en:
+El conjunto de prueba estuvo compuesto por 111 imágenes. Según la matriz de confusión, el modelo clasificó correctamente 105 imágenes:
 
 ```text
-backend/model/model_meta.json
+27 delantal + 20 gorro + 29 guantes + 29 tapabocas = 105 aciertos
 ```
+
+Por tanto:
+
+```text
+105 / 111 = 0.9459 = 94.59%
+```
+
+También se obtuvo el siguiente resumen por clase:
+
+| Clase | Precision | Recall | F1-score | Imágenes |
+|---|---:|---:|---:|---:|
+| Delantal | 0.93 | 0.93 | 0.93 | 29 |
+| Gorro | 1.00 | 0.95 | 0.98 | 21 |
+| Guantes | 0.91 | 0.94 | 0.92 | 31 |
+| Tapabocas | 0.97 | 0.97 | 0.97 | 30 |
 
 Las siguientes gráficas se incluyen como evidencia rápida del entrenamiento y la evaluación del modelo. La interpretación completa de estos resultados se desarrolla en el informe del proyecto.
 
@@ -283,7 +330,7 @@ Para ejecutar el sistema se deben usar dos terminales: una para el backend y otr
 ## 1. Clonar el repositorio
 
 ```bash
-git clone URL_DEL_REPOSITORIO
+git clone https://github.com/josuegallego/MonitoreoEPP-Cafeteria
 cd MonitoreoEPP-Cafeteria
 ```
 
@@ -415,8 +462,8 @@ El modo simulación permite ejecutar inspecciones automáticas para representar 
 
 El sistema cuenta con dos opciones:
 
-- **Demo 12s:** realiza una inspección automática cada 12 segundos para visualizar rápidamente el comportamiento del sistema en un periodo corto.
-- **Real 5min:** realiza una inspección cada 5 minutos, simulando un monitoreo periódico durante el turno.
+- **Demo 12 segundos:** realiza una inspección automática cada 12 segundos para visualizar rápidamente el comportamiento del sistema en un periodo corto.
+- **Real 5 minutos:** realiza una inspección cada 5 minutos, simulando un monitoreo periódico durante el turno.
 
 ## Registro de inspecciones
 
@@ -425,10 +472,7 @@ Durante la simulación, el sistema guarda un registro de las inspecciones realiz
 Este registro permite consultar:
 
 - Número de inspecciones realizadas.
-- Hora de cada inspección.
-- Cantidad de personas detectadas.
-- Cumplimiento general por inspección.
-- Cumplimiento general del turno.
+- Cumplimiento general.
 - Elementos de protección con mayor incumplimiento.
 - Alertas activas.
 - Tendencia del turno.
@@ -437,16 +481,7 @@ Este registro permite consultar:
 
 El sistema permite descargar un reporte del turno en formato `.txt` con el resumen de las inspecciones realizadas.
 
-El reporte incluye:
-
-- Fecha del turno.
-- Cumplimiento global.
-- Total de inspecciones.
-- Inspecciones con incumplimientos.
-- Hora crítica.
-- EPP más crítico.
-- Porcentaje de cumplimiento por cada EPP.
-- Detalle de cada inspección realizada.
+El reporte incluye información general sobre el cumplimiento y los elementos de protección detectados o faltantes durante el uso del sistema.
 
 ## Reinicio del turno
 
@@ -482,9 +517,36 @@ POST /detect/base64
 
 Recibe una imagen en formato base64 y devuelve el resultado del análisis.
 
-## Video demostrativo
+## Archivos importantes
 
-Enlace al video demostrativo:
+### `backend/main.py`
+
+Contiene la API del sistema y el pipeline de inferencia.  
+Se encarga de recibir imágenes, detectar personas, clasificar EPP y devolver los resultados al frontend.
+
+### `backend/train.py`
+
+Contiene el proceso de entrenamiento del modelo CNN.  
+Carga el dataset, aplica transformaciones, entrena el modelo, evalúa los resultados y guarda las gráficas.
+
+### `frontend/app/page.tsx`
+
+Contiene la interfaz principal del sistema.  
+Permite subir imágenes, iniciar simulaciones, visualizar resultados y consultar el registro del turno.
+
+### `dataset_clasificacion/`
+
+Contiene las imágenes utilizadas para entrenamiento, validación y prueba.
+
+## Enlaces del proyecto
+
+### Proyecto desplegado
+
+```text
+https://monitoreo-epp-cafeteria.vercel.app/
+```
+
+### Video demostrativo
 
 ```text
 https://youtu.be/b2-3f61FyFc
